@@ -9,19 +9,16 @@ import (
 
 var addBOM = flag.Bool("bom", false, "specifies whether to include or not include BOM prefix")
 
-func generateUnknownCharacter(charset string) [4]byte {
+func generateUnknownCharacter(charset string) uint32 {
 	// replacement character (U+fffd) is used for representing uknown character
-
 	switch charset {
 	case types.UTF_8:
-		return [4]byte{0xbd, 0xbf, 0xef, 0}
-	case types.UTF_16, types.UTF_16BE:
-		return [4]byte{0xff, 0xfd, 0, 0}
-	case types.UTF_16LE:
-		return [4]byte{0xfd, 0xff, 0, 0}
+		return 0xefbfbd
+	case types.UTF_16, types.UTF_16BE, types.UTF_16LE:
+		return 0xfffd
 	}
 
-	return [4]byte{0, 0, 0xff, 0xfd}
+	return 0xfffd
 }
 
 // returns Endianness string "le" or "be", has_BOM boolean
@@ -38,6 +35,9 @@ func checkUTF32Endianness(bytes []byte) (types.Endianness, bool) {
 			if bytes[i+3] > 0 || bytes[i+2]&0xe0 != 0 {
 				logger.Log("UTF-32 Big Endian format detected")
 				return types.BIG_ENDIAN, false
+			} else if bytes[i] > 0 || bytes[i+1]&0xe0 != 0 {
+				logger.Log("UTF-32 Little Endian format detected")
+				return types.LITTLE_ENDIAN, false
 			}
 		}
 	}
@@ -81,6 +81,7 @@ func ConvertToUTF8(input []byte) ([]byte, error) {
 	}
 
 	if *addBOM {
+		// byte order mark for utf8 - 0xEFBBBF
 		output = append(output, 0xEF, 0xBB, 0xBF)
 	}
 
@@ -94,12 +95,15 @@ func ConvertToUTF8(input []byte) ([]byte, error) {
 		}
 
 		if !isValidUnicodeRange(bits) {
-			bits = 0xefbfbd
+			bits = generateUnknownCharacter(types.UTF_8)
 		} else if bits >= 0x10000 {
+			// Mark with prefix 1111 0xxx 10xx xxxx 10xx xxxx 10xx xxxx and fill the x's with the available bits
 			bits = (((bits & 0x1c0000) << 6) | ((bits & 0x30000) << 4)) | ((bits & 0xf000) << 4) | ((bits & 0xfc0) << 2) | (bits & 0x3f) | 0xf0808080
 		} else if bits >= 0x800 {
+			// Mark with prefix 1110 xxxx 10xx xxxx 10xx xxxx and fill the x's with the available bits
 			bits = ((bits & 0xf000) << 4) | ((bits & 0xfc0) << 2) | (bits & 0x3f) | 0xe08080
 		} else if bits >= 0x80 {
+			// Mark with prefix 110x xxxx 10xx xxxx and fill the x's with the available bits
 			bits = ((bits & 0x7c0) << 2) | (bits & 0x3f) | 0xc080
 		}
 
@@ -137,59 +141,48 @@ func ConvertToUTF16(input []byte, targetEncoding string) ([]byte, error) {
 
 	if *addBOM {
 		if isTargetBigEndian {
+			// byte order mark for utf16 BE - 0xFEFF
 			output = append(output, 0xFE, 0xFF)
 		} else {
+			// byte order mark for utf16 LE - 0xFFFE
 			output = append(output, 0xFF, 0xFE)
 		}
 	}
 
 	for i := startIdx; i+3 < len(input); i += 4 {
-		var bytes = [4]byte{}
+		var bits uint32
 
 		if endianness == types.LITTLE_ENDIAN {
-			bytes[0], bytes[1], bytes[2], bytes[3] = input[i], input[i+1], input[i+2], input[i+3]
+			bits = uint32(input[i+3])<<24 | uint32(input[i+2])<<16 | uint32(input[i+1])<<8 | uint32(input[i])
 		} else {
-			bytes[0], bytes[1], bytes[2], bytes[3] = input[i+3], input[i+2], input[i+1], input[i]
+			bits = uint32(input[i])<<24 | uint32(input[i+1])<<16 | uint32(input[i+2])<<8 | uint32(input[i+3])
 		}
 
-		var bits uint32 = uint32(bytes[3])<<24 | uint32(bytes[2])<<16 | uint32(bytes[1])<<8 | uint32(bytes[0])
+		var highSurrogate, lowSurrogate uint16
 
 		if !isValidUnicodeRange(bits) {
-			bytes = generateUnknownCharacter(targetEncoding)
+			bits = generateUnknownCharacter(targetEncoding)
 		} else if bits >= 0x10000 {
-			bytes[2] = bytes[2] - 0x01
-			var surrogateBits uint32 = (uint32(bytes[2]&0x0f) << 16) | uint32(bytes[1])<<8 | uint32(bytes[0])
+			bits = bits - 0x10000
 
-			// high surrogate
-			var highSurrogate uint16 = 0xD800 + uint16(surrogateBits>>10)
-			bytes[3] = byte(highSurrogate >> 8)
-			bytes[2] = byte(highSurrogate)
-
-			// low surrogate
-			var lowSurrogate = 0xDC00 + uint16(surrogateBits&0x03ff)
-			bytes[1] = byte(lowSurrogate >> 8)
-			bytes[0] = byte(lowSurrogate)
-		} else {
-			bytes[2] = 0
-			bytes[3] = 0
+			// high surrogate - add 0xD800 with the leading 10 bits
+			highSurrogate = 0xD800 + uint16(bits>>10)
+			// low surrogate - add 0xDC00 with the trailing 10 bits
+			lowSurrogate = 0xDC00 + uint16(bits&0x03ff)
 		}
 
 		if isTargetBigEndian {
-			if bytes[0] == 0 && bytes[1] == 0 {
-				continue
+			if lowSurrogate != 0 {
+				output = append(output, byte(highSurrogate>>8), byte(highSurrogate), byte(lowSurrogate>>8), byte(lowSurrogate))
+			} else {
+				output = append(output, byte(bits>>8), byte(bits))
 			}
-			if bytes[3] != 0 {
-				output = append(output, bytes[3], bytes[2])
-			}
-			output = append(output, bytes[1], bytes[0])
 		} else {
-			if bytes[0] == 0 && bytes[1] == 0 {
-				continue
+			if lowSurrogate != 0 {
+				output = append(output, byte(highSurrogate), byte(highSurrogate>>8), byte(lowSurrogate), byte(lowSurrogate>>8))
+			} else {
+				output = append(output, byte(bits), byte(bits>>8))
 			}
-			if bytes[3] != 0 {
-				output = append(output, bytes[2], bytes[3])
-			}
-			output = append(output, bytes[0], bytes[1])
 		}
 	}
 
