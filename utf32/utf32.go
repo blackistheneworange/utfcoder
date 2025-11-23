@@ -5,13 +5,10 @@ import (
 	"flag"
 	"utfcoder/logger"
 	"utfcoder/types"
+	"utfcoder/utils"
 )
 
-var addBOM = flag.Bool("addbom", false, "specifies whether to include or not include BOM prefix")
-
-func generateGarbageCharacter() [4]byte {
-	return [4]byte{0xbd, 0xbf, 0xef, 0}
-}
+var addBOM = flag.Bool("bom", false, "specifies whether to include or not include BOM prefix")
 
 // returns Endianness string "le" or "be", has_BOM boolean
 func checkUTF32Endianness(bytes []byte) (types.Endianness, bool) {
@@ -27,38 +24,15 @@ func checkUTF32Endianness(bytes []byte) (types.Endianness, bool) {
 			if bytes[i+3] > 0 || bytes[i+2]&0xe0 != 0 {
 				logger.Log("UTF-32 Big Endian format detected")
 				return types.BIG_ENDIAN, false
+			} else if bytes[i] > 0 || bytes[i+1]&0xe0 != 0 {
+				logger.Log("UTF-32 Little Endian format detected")
+				return types.LITTLE_ENDIAN, false
 			}
 		}
 	}
 
 	logger.Log("No UTF-32 Byte Order Mark (BOM) detected. Considering Little Endian format as default")
 	return types.LITTLE_ENDIAN, false
-}
-
-func isValidUnicodeRange(bytes [4]byte) bool {
-	// check if the unicode goes beyong U+10FFFF
-	if bytes[3]&0xff != 0 || bytes[2] > 0x10 {
-		return false
-	}
-
-	// check if unicode is within utf-16 surrogate range of U+D800 to U+DFFF
-	if bytes[1] >= 216 && bytes[1] <= 223 && bytes[2] == 0 && bytes[3] == 0 {
-		return false
-	}
-
-	return true
-}
-
-func getWordLength(bytes [4]byte) uint8 {
-	if bytes[3] != 0 || bytes[2] != 0 { // if 3rd or 4th byte is not 0, then it is going to take 4 bytes to represent in utf8
-		return 4
-	} else if bytes[1]&0xf8 != 0 { // if any of 2nd byte's leading 5 bits is set, then it is going to take 3 bytes to represent in utf8
-		return 3
-	} else if bytes[1] != 0 || bytes[0]&0x80 != 0 { // else if 2nd byte is not zero or 1st byte's leading bit is set, then it is going to take 2 bytes to represent in utf8
-		return 2
-	}
-
-	return 1
 }
 
 func isValidInput(input []byte) bool {
@@ -81,46 +55,113 @@ func ConvertToUTF8(input []byte) ([]byte, error) {
 		startIdx = 4
 	}
 
+	if *addBOM {
+		// byte order mark for utf8 - 0xEFBBBF
+		output = append(output, 0xEF, 0xBB, 0xBF)
+	}
+
 	for i := startIdx; i+3 < len(input); i += 4 {
-		var bytes = [4]byte{}
+		var bits uint32
 
 		if endianness == types.LITTLE_ENDIAN {
-			bytes[0], bytes[1], bytes[2], bytes[3] = input[i], input[i+1], input[i+2], input[i+3]
+			bits = uint32(input[i+3])<<24 | uint32(input[i+2])<<16 | uint32(input[i+1])<<8 | uint32(input[i])
 		} else {
-			bytes[0], bytes[1], bytes[2], bytes[3] = input[i+3], input[i+2], input[i+1], input[i]
+			bits = uint32(input[i])<<24 | uint32(input[i+1])<<16 | uint32(input[i+2])<<8 | uint32(input[i+3])
 		}
 
-		wordLength := getWordLength(bytes)
-
-		if !isValidUnicodeRange(bytes) {
-			bytes = generateGarbageCharacter()
-		} else if wordLength == 4 {
-			bytes[3] = 0xf0 | ((bytes[2] & 0x1c) >> 2)           // mark 4th byte as 1111 0xxx to indicate 4 width byte character, and copy 3rd, 4th, 5th leading bits from 3rd byte
-			bytes[2] = ((bytes[2]<<4)|bytes[1]>>4)&0x3f | 0x80   // copy leading 4 bits from 2nd byte, and set 10 prefix
-			bytes[1] = ((bytes[1]<<2)|(bytes[0]>>6))&0x3f | 0x80 // copy leading 2 bits from 1st byte, and set 10 prefix
-			bytes[0] = (bytes[0] | 0x80) & 0xbf                  // set 10 prefix
-		} else if wordLength == 3 {
-			bytes[2] = 0xe0 | (bytes[1] >> 4)                    // mark 3rd byte as 1110 xxxx to indicate 3 width byte character, and copy leading 4 bits from 2nd byte
-			bytes[1] = ((bytes[1]<<2)|(bytes[0]>>6))&0x3f | 0x80 // copy leading 2 bits from 1st byte, and set 10 prefix
-			bytes[0] = (bytes[0] & 0x3f) | 0x80                  // set 10 prefix
-		} else if wordLength == 2 {
-			bytes[1] = ((bytes[1]<<2)&0x1f | 0xc0) | (bytes[0] >> 6) // mark 2nd byte as 110x xxxx to indicate 2 width byte character, and copy leading 2 bits from 1st byte
-			bytes[0] = (bytes[0] & 0x3f) | 0x80                      // set 10 prefix
+		if !utils.IsValidUnicodeRange(bits) {
+			bits = utils.GenerateUnknownCharacter(types.UTF_8)
+		} else if bits >= 0x10000 {
+			// Mark with prefix 1111 0xxx 10xx xxxx 10xx xxxx 10xx xxxx and fill the x's with the available bits
+			bits = (((bits & 0x1c0000) << 6) | ((bits & 0x30000) << 4)) | ((bits & 0xf000) << 4) | ((bits & 0xfc0) << 2) | (bits & 0x3f) | 0xf0808080
+		} else if bits >= 0x800 {
+			// Mark with prefix 1110 xxxx 10xx xxxx 10xx xxxx and fill the x's with the available bits
+			bits = ((bits & 0xf000) << 4) | ((bits & 0xfc0) << 2) | (bits & 0x3f) | 0xe08080
+		} else if bits >= 0x80 {
+			// Mark with prefix 110x xxxx 10xx xxxx and fill the x's with the available bits
+			bits = ((bits & 0x7c0) << 2) | (bits & 0x3f) | 0xc080
 		}
 
-		for i := len(bytes) - 1; i >= 0; i-- {
-			if bytes[i] != 0 {
-				output = append(output, bytes[i])
+		for bits != 0 {
+			b := byte(bits >> 24)
+			if b != 0 {
+				output = append(output, b)
+			}
+			bits = bits << 8
+		}
+	}
+
+	logger.Log("\nConverted to UTF-8", output)
+
+	return output, nil
+}
+
+func ConvertToUTF16(input []byte, targetEncoding string) ([]byte, error) {
+	logger.Log("\nConvert UTF-32", input, "To UTF-16")
+
+	if !isValidInput(input) {
+		return []byte{}, errors.New("invalid input")
+	}
+
+	endianness, hasBOM := checkUTF32Endianness(input)
+
+	var output = make([]byte, 0, len(input))
+
+	startIdx := 0
+	if hasBOM {
+		startIdx = 4
+	}
+
+	isTargetBigEndian := targetEncoding == types.UTF_16BE || targetEncoding == types.UTF_16
+
+	if *addBOM {
+		if isTargetBigEndian {
+			// byte order mark for utf16 BE - 0xFEFF
+			output = append(output, 0xFE, 0xFF)
+		} else {
+			// byte order mark for utf16 LE - 0xFFFE
+			output = append(output, 0xFF, 0xFE)
+		}
+	}
+
+	for i := startIdx; i+3 < len(input); i += 4 {
+		var bits uint32
+
+		if endianness == types.LITTLE_ENDIAN {
+			bits = uint32(input[i+3])<<24 | uint32(input[i+2])<<16 | uint32(input[i+1])<<8 | uint32(input[i])
+		} else {
+			bits = uint32(input[i])<<24 | uint32(input[i+1])<<16 | uint32(input[i+2])<<8 | uint32(input[i+3])
+		}
+
+		var highSurrogate, lowSurrogate uint16
+
+		if !utils.IsValidUnicodeRange(bits) {
+			bits = utils.GenerateUnknownCharacter(targetEncoding)
+		} else if bits >= 0x10000 {
+			bits = bits - 0x10000
+
+			// high surrogate - add 0xD800 with the leading 10 bits
+			highSurrogate = 0xD800 + uint16(bits>>10)
+			// low surrogate - add 0xDC00 with the trailing 10 bits
+			lowSurrogate = 0xDC00 + uint16(bits&0x03ff)
+		}
+
+		if isTargetBigEndian {
+			if lowSurrogate != 0 {
+				output = append(output, byte(highSurrogate>>8), byte(highSurrogate), byte(lowSurrogate>>8), byte(lowSurrogate))
+			} else {
+				output = append(output, byte(bits>>8), byte(bits))
+			}
+		} else {
+			if lowSurrogate != 0 {
+				output = append(output, byte(highSurrogate), byte(highSurrogate>>8), byte(lowSurrogate), byte(lowSurrogate>>8))
+			} else {
+				output = append(output, byte(bits), byte(bits>>8))
 			}
 		}
 	}
 
-	if *addBOM {
-		bomPrefixedOutput := append([]byte{0xEF, 0xBB, 0xBF}, output...)
-		output = bomPrefixedOutput
-	}
-
-	logger.Log("\nConverted to UTF-8", output)
+	logger.Log("\nConverted to", targetEncoding, output)
 
 	return output, nil
 }
