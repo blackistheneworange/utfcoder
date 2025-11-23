@@ -5,21 +5,10 @@ import (
 	"flag"
 	"utfcoder/logger"
 	"utfcoder/types"
+	"utfcoder/utils"
 )
 
 var addBOM = flag.Bool("bom", false, "specifies whether to include or not include BOM prefix")
-
-func generateUnknownCharacter(charset string) uint32 {
-	// replacement character (U+fffd) is used for representing uknown character
-	switch charset {
-	case types.UTF_8:
-		return 0xefbfbd
-	case types.UTF_16, types.UTF_16BE, types.UTF_16LE:
-		return 0xfffd
-	}
-
-	return 0xfffd
-}
 
 // returns Endianness string "le" or "be", has_BOM boolean
 func checkUTF32Endianness(bytes []byte) (types.Endianness, bool) {
@@ -44,20 +33,6 @@ func checkUTF32Endianness(bytes []byte) (types.Endianness, bool) {
 
 	logger.Log("No UTF-32 Byte Order Mark (BOM) detected. Considering Little Endian format as default")
 	return types.LITTLE_ENDIAN, false
-}
-
-func isValidUnicodeRange(bits uint32) bool {
-	// check if the unicode goes beyong U+10FFFF
-	if bits > 0x10FFFF {
-		return false
-	}
-
-	// // check if unicode is within utf-16 surrogate range of U+D800 to U+DFFF
-	if bits >= 0xD800 && bits <= 0xDFFF {
-		return false
-	}
-
-	return true
 }
 
 func isValidInput(input []byte) bool {
@@ -94,8 +69,8 @@ func ConvertToUTF8(input []byte) ([]byte, error) {
 			bits = uint32(input[i])<<24 | uint32(input[i+1])<<16 | uint32(input[i+2])<<8 | uint32(input[i+3])
 		}
 
-		if !isValidUnicodeRange(bits) {
-			bits = generateUnknownCharacter(types.UTF_8)
+		if !utils.IsValidUnicodeRange(bits) {
+			bits = utils.GenerateUnknownCharacter(types.UTF_8)
 		} else if bits >= 0x10000 {
 			// Mark with prefix 1111 0xxx 10xx xxxx 10xx xxxx 10xx xxxx and fill the x's with the available bits
 			bits = (((bits & 0x1c0000) << 6) | ((bits & 0x30000) << 4)) | ((bits & 0xf000) << 4) | ((bits & 0xfc0) << 2) | (bits & 0x3f) | 0xf0808080
@@ -160,8 +135,8 @@ func ConvertToUTF16(input []byte, targetEncoding string) ([]byte, error) {
 
 		var highSurrogate, lowSurrogate uint16
 
-		if !isValidUnicodeRange(bits) {
-			bits = generateUnknownCharacter(targetEncoding)
+		if !utils.IsValidUnicodeRange(bits) {
+			bits = utils.GenerateUnknownCharacter(targetEncoding)
 		} else if bits >= 0x10000 {
 			bits = bits - 0x10000
 
