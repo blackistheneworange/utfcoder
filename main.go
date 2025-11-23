@@ -16,7 +16,7 @@ var targetFileFlag = flag.String("t", "", "target file to write")
 var fromEncodingFlag = flag.String("from", "", "source file encoding")
 var toEncodingFlag = flag.String("to", "", "target file encoding")
 
-var validEncodings = [3]string{types.UTF_8, types.UTF_16, types.UTF_32}
+var validEncodings = [5]string{types.UTF_8, types.UTF_16, types.UTF_16BE, types.UTF_16LE, types.UTF_32}
 var sourceFile, targetFile, fromEncoding, toEncoding string
 
 func main() {
@@ -44,11 +44,13 @@ func main() {
 	case types.UTF_32:
 		if toEncoding == types.UTF_8 {
 			output, err = UTF32.ConvertToUTF8(data)
+		} else if toEncoding == types.UTF_16 || toEncoding == types.UTF_16LE || toEncoding == types.UTF_16BE {
+			output, err = UTF32.ConvertToUTF16(data, toEncoding)
 		} else {
-			logger.Fatal(strings.ToUpper(types.UTF_32), "to", strings.ToUpper(toEncoding), "not implemented yet")
+			logger.Fatal(strings.ToUpper(types.UTF_32), "to", strings.ToUpper(toEncoding), "not implemented")
 		}
 	default:
-		logger.Fatal(strings.ToUpper(fromEncoding), "to", strings.ToUpper(toEncoding), "not implemented yet")
+		logger.Fatal(strings.ToUpper(fromEncoding), "to", strings.ToUpper(toEncoding), "not implemented")
 	}
 
 	if err != nil {
