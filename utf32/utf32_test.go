@@ -10,7 +10,7 @@ func TestConvertToUTF8(t *testing.T) {
 	for idx := 0; idx < len(utf8TestInputs); idx += 2 {
 		input := utf8TestInputs[idx]
 		expected := utf8TestInputs[idx+1]
-		output, err := ConvertToUTF8(input)
+		output, err := ConvertToUTF8(input, false)
 
 		if !bytes.Equal(expected, output) || err != nil {
 			t.Errorf(`ConvertToUTF8(%v) = output=%v (%v), error=%v, Expected = output=%v (%v), error=%v`, input, output, string(output), err, expected, string(expected), nil)
@@ -22,7 +22,7 @@ func TestInvalidInputConvertToUTF8(t *testing.T) {
 	for idx := 0; idx < len(invalidTestInputs); idx += 2 {
 		input := invalidTestInputs[idx]
 		expected := invalidTestInputs[idx+1]
-		output, err := ConvertToUTF8(input)
+		output, err := ConvertToUTF8(input, false)
 
 		if !bytes.Equal(expected, output) || err == nil {
 			t.Errorf(`ConvertToUTF8(%v) = output=%v (%v), error=%v, Expected = output=%v (%v), error=%v`, input, output, string(output), err, expected, string(expected), "invalid input")
@@ -31,11 +31,10 @@ func TestInvalidInputConvertToUTF8(t *testing.T) {
 }
 
 func TestConvertToUTF16(t *testing.T) {
-	*addBOM = true
 	for idx := 0; idx < len(utf16TestInputs); idx += 2 {
 		input := utf16TestInputs[idx]
 		expected := utf16TestInputs[idx+1]
-		output, err := ConvertToUTF16(input, types.UTF_16LE)
+		output, err := ConvertToUTF16(input, types.UTF_16LE, true)
 
 		if !bytes.Equal(expected, output) || err != nil {
 			t.Errorf(`ConvertToUTF16(%v) = output=%v (%v), error=%v, Expected = output=%v (%v), error=%v`, input, output, string(output), err, expected, string(expected), nil)
@@ -47,7 +46,7 @@ func TestInvalidInputConvertToUTF16(t *testing.T) {
 	for idx := 0; idx < len(invalidTestInputs); idx += 2 {
 		input := invalidTestInputs[idx]
 		expected := invalidTestInputs[idx+1]
-		output, err := ConvertToUTF16(input, types.UTF_16LE)
+		output, err := ConvertToUTF16(input, types.UTF_16LE, false)
 
 		if !bytes.Equal(expected, output) || err == nil {
 			t.Errorf(`ConvertToUTF8(%v) = output=%v (%v), error=%v, Expected = output=%v (%v), error=%v`, input, output, string(output), err, expected, string(expected), "invalid input")

@@ -2,13 +2,10 @@ package UTF32
 
 import (
 	"errors"
-	"flag"
 	"utfcoder/logger"
 	"utfcoder/types"
 	"utfcoder/utils"
 )
-
-var addBOM = flag.Bool("bom", false, "specifies whether to include or not include BOM prefix")
 
 // returns Endianness string "le" or "be", has_BOM boolean
 func checkUTF32Endianness(bytes []byte) (types.Endianness, bool) {
@@ -39,7 +36,7 @@ func isValidInput(input []byte) bool {
 	return len(input) != 0 && len(input)%4 == 0
 }
 
-func ConvertToUTF8(input []byte) ([]byte, error) {
+func ConvertToUTF8(input []byte, addBOM bool) ([]byte, error) {
 	logger.Log("\nConvert UTF-32", input, "To UTF-8")
 
 	if !isValidInput(input) {
@@ -55,7 +52,7 @@ func ConvertToUTF8(input []byte) ([]byte, error) {
 		startIdx = 4
 	}
 
-	if *addBOM {
+	if addBOM {
 		// byte order mark for utf8 - 0xEFBBBF
 		output = append(output, 0xEF, 0xBB, 0xBF)
 	}
@@ -96,7 +93,7 @@ func ConvertToUTF8(input []byte) ([]byte, error) {
 	return output, nil
 }
 
-func ConvertToUTF16(input []byte, targetEncoding string) ([]byte, error) {
+func ConvertToUTF16(input []byte, targetEncoding string, addBOM bool) ([]byte, error) {
 	logger.Log("\nConvert UTF-32", input, "To UTF-16")
 
 	if !isValidInput(input) {
@@ -114,7 +111,7 @@ func ConvertToUTF16(input []byte, targetEncoding string) ([]byte, error) {
 
 	isTargetBigEndian := targetEncoding == types.UTF_16BE || targetEncoding == types.UTF_16
 
-	if *addBOM {
+	if addBOM {
 		if isTargetBigEndian {
 			// byte order mark for utf16 BE - 0xFEFF
 			output = append(output, 0xFE, 0xFF)

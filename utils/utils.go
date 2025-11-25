@@ -9,6 +9,8 @@ func GenerateUnknownCharacter(charset string) uint32 {
 		return 0xefbfbd
 	case types.UTF_16, types.UTF_16BE, types.UTF_16LE:
 		return 0xfffd
+	case types.UTF_32, types.UTF_32BE, types.UTF_32LE:
+		return 0x0000fffd
 	}
 
 	return 0xfffd

@@ -13,4 +13,6 @@ const (
 	UTF_16LE string = "utf-16le"
 	UTF_16BE string = "utf-16be"
 	UTF_32   string = "utf-32"
+	UTF_32LE string = "utf-32le"
+	UTF_32BE string = "utf-32be"
 )
