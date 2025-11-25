@@ -54,6 +54,18 @@ func TestConvertToUTF32LEWithBOM(t *testing.T) {
 	}
 }
 
+func TestConvertToUTF16LE(t *testing.T) {
+	for idx := 0; idx < len(utf8To16LittleEndianTestInputs); idx += 2 {
+		input := utf8To16LittleEndianTestInputs[idx]
+		expected := utf8To16LittleEndianTestInputs[idx+1]
+		output, err := ConvertToUTF16(input, types.UTF_16LE, false)
+
+		if !bytes.Equal(expected, output) || err != nil {
+			t.Errorf(`ConvertToUTF16(%v) = output=%v (%v), error=%v, Expected = output=%v (%v), error=%v`, input, output, string(output), err, expected, string(expected), nil)
+		}
+	}
+}
+
 var utf8To32BigEndianTestInputs = [][]byte{
 	{65}, {0, 0, 0, 65}, // 'A' (U+0041)
 	{122}, {0, 0, 0, 122}, // 'z' (U+007A)
@@ -144,4 +156,52 @@ var utf8To32LittleEndianTestInputs = [][]byte{
 	{}, {}, // Empty input
 
 	{237, 156, 128}, {0, 215, 0, 0}, // U+D700 (valid BMP)
+}
+
+var utf8To16LittleEndianTestInputs = [][]byte{
+	{65}, {65, 0}, // 'A' (U+0041)
+	{122}, {122, 0}, // 'z' (U+007A)
+	{32}, {32, 0}, // space (U+0020)
+
+	{195, 169}, {233, 0}, // é (U+00E9)
+	{194, 169}, {169, 0}, // © (U+00A9)
+	{194, 176}, {176, 0}, // ° (U+00B0)
+	{195, 177}, {241, 0}, // ñ (U+00F1)
+
+	{208, 144}, {16, 4}, // А (U+0410)
+	{209, 129}, {65, 4}, // с (U+0441)
+
+	{223, 191}, {255, 7}, // ߿ (U+07FF)
+	{237, 159, 191}, {255, 215}, // ퟿ (U+D7FF)
+
+	{240, 144, 128, 128}, {0x00, 0xD8, 0x00, 0xDC}, // 𐀀 (U+10000)
+	{240, 144, 128, 129}, {0x00, 0xD8, 0x01, 0xDC}, // 𐀁 (U+10001)
+
+	{240, 159, 152, 128}, {0x3D, 0xD8, 0x00, 0xDE}, // 😀 (U+1F600)
+
+	{244, 143, 191, 191}, {0xFF, 0xDB, 0xFF, 0xDF}, // U+10FFFF
+
+	{239, 191, 189}, {253, 255}, // U+FFFD (replacement)
+
+	{244, 129, 128, 128}, // U+101000 (valid PUA)
+	{196, 219, 0, 220},   // surrogate pair for U+101000
+
+	{225, 131, 191}, {255, 16}, // U+10FF
+
+	{195, 191}, {255, 0}, // ÿ (U+00FF)
+
+	{239, 191, 189}, {253, 255}, // U+FFFD replacement
+
+	{239, 191, 189}, {253, 255}, // invalid → U+FFFD
+
+	{224, 162, 128}, {128, 8}, // U+0880
+
+	{226, 130, 172}, {172, 32}, // € (U+20AC)
+	{226, 130, 185}, {185, 32}, // ₹ (U+20B9)
+
+	{227, 128, 173}, {45, 48}, // ㌭ (U+302D)
+
+	{}, {}, // empty input
+
+	{237, 156, 128}, {0x00, 0xD7}, // U+D700 valid BMP
 }
