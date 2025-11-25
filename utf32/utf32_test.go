@@ -7,9 +7,9 @@ import (
 )
 
 func TestConvertToUTF8(t *testing.T) {
-	for idx := 0; idx < len(utf8TestInputs); idx += 2 {
-		input := utf8TestInputs[idx]
-		expected := utf8TestInputs[idx+1]
+	for idx := 0; idx < len(utf32To8TestInputs); idx += 2 {
+		input := utf32To8TestInputs[idx]
+		expected := utf32To8TestInputs[idx+1]
 		output, err := ConvertToUTF8(input, false)
 
 		if !bytes.Equal(expected, output) || err != nil {
@@ -31,9 +31,9 @@ func TestInvalidInputConvertToUTF8(t *testing.T) {
 }
 
 func TestConvertToUTF16(t *testing.T) {
-	for idx := 0; idx < len(utf16TestInputs); idx += 2 {
-		input := utf16TestInputs[idx]
-		expected := utf16TestInputs[idx+1]
+	for idx := 0; idx < len(utf32To16LittleEndianTestInputs); idx += 2 {
+		input := utf32To16LittleEndianTestInputs[idx]
+		expected := utf32To16LittleEndianTestInputs[idx+1]
 		output, err := ConvertToUTF16(input, types.UTF_16LE, true)
 
 		if !bytes.Equal(expected, output) || err != nil {
@@ -61,7 +61,7 @@ var invalidTestInputs = [][]byte{
 }
 
 // UTF-32 inputs (mixed endianness) and their correct UTF-16 LE outputs.
-var utf16TestInputs = [][]byte{
+var utf32To16LittleEndianTestInputs = [][]byte{
 	// BMP - Single 16-bit unit (0x0000 - 0xFFFF)
 	{65, 0, 0, 0}, {255, 254, 65, 0}, // 'A' (U+0041)
 	{0, 0, 0, 65}, {255, 254, 65, 0}, // 'A' BE
@@ -117,7 +117,7 @@ var utf16TestInputs = [][]byte{
 }
 
 // UTF-32 inputs (mixed endianness) and their correct UTF-8 outputs.
-var utf8TestInputs = [][]byte{
+var utf32To8TestInputs = [][]byte{
 	{65, 0, 0, 0}, {65}, // 'A' (U+0041, Latin Capital A)
 	{0, 0, 0, 65}, {65}, // 'A' (U+0041, BE)
 	{122, 0, 0, 0}, {122}, // 'z' (U+007A, Latin Small z)
