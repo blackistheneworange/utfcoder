@@ -6,8 +6,9 @@
 *.dylib
 *.test
 *.out
+
+# Plain text files
 *.txt
-*.js
 
 # Compiled object files
 *.o
