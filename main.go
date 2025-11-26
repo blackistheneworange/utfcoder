@@ -55,6 +55,8 @@ func main() {
 	case types.UTF_8:
 		if toEncoding == types.UTF_32 || toEncoding == types.UTF_32LE || toEncoding == types.UTF_32BE {
 			output, err = UTF8.ConvertToUTF32(data, toEncoding, *addBOM)
+		} else if toEncoding == types.UTF_16 || toEncoding == types.UTF_16LE || toEncoding == types.UTF_16BE {
+			output, err = UTF8.ConvertToUTF16(data, toEncoding, *addBOM)
 		} else {
 			logger.Fatal(strings.ToUpper(types.UTF_8), "to", strings.ToUpper(toEncoding), "not implemented")
 		}
