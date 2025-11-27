@@ -7,6 +7,7 @@ import (
 	"strings"
 	"utfcoder/logger"
 	"utfcoder/types"
+	UTF16 "utfcoder/utf16"
 	UTF32 "utfcoder/utf32"
 	UTF8 "utfcoder/utf8"
 )
@@ -51,6 +52,12 @@ func main() {
 			output, err = UTF32.ConvertToUTF16(data, toEncoding, *addBOM)
 		} else {
 			logger.Fatal(strings.ToUpper(types.UTF_32), "to", strings.ToUpper(toEncoding), "not implemented")
+		}
+	case types.UTF_16:
+		if toEncoding == types.UTF_32 || toEncoding == types.UTF_32LE || toEncoding == types.UTF_32BE {
+			output, err = UTF16.ConvertToUTF32(data, toEncoding, *addBOM)
+		} else {
+			logger.Fatal(strings.ToUpper(types.UTF_8), "to", strings.ToUpper(toEncoding), "not implemented")
 		}
 	case types.UTF_8:
 		if toEncoding == types.UTF_32 || toEncoding == types.UTF_32LE || toEncoding == types.UTF_32BE {
