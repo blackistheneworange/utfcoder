@@ -50,6 +50,28 @@ func TestConvertToUTF32BEWithBOM(t *testing.T) {
 	}
 }
 
+func TestConvertToUTF8(t *testing.T) {
+	for idx := 0; idx < len(utf16LittleEndianTo8TestInputs); idx += 2 {
+		input := utf16LittleEndianTo8TestInputs[idx]
+		expected := utf16LittleEndianTo8TestInputs[idx+1]
+		output, err := ConvertToUTF8(append([]byte{0xFF, 0xFE}, input...), false)
+
+		if !bytes.Equal(expected, output) || err != nil {
+			t.Errorf(`ConvertToUTF8(%v) = output=%v (%v), error=%v, Expected = output=%v (%v), error=%v`, input, output, string(output), err, expected, string(expected), nil)
+		}
+	}
+}
+
+func TestConvertToUTF8WithBOM(t *testing.T) {
+	input := utf16LittleEndianTo8TestInputs[0]
+	expected := append([]byte{0xEF, 0xBB, 0xBF}, utf16LittleEndianTo8TestInputs[1]...)
+	output, err := ConvertToUTF8(append([]byte{0xFF, 0xFE}, input...), true)
+
+	if !bytes.Equal(expected, output) || err != nil {
+		t.Errorf(`ConvertToUTF8(%v) = output=%v (%v), error=%v, Expected = output=%v (%v), error=%v`, input, output, string(output), err, expected, string(expected), nil)
+	}
+}
+
 var utf16LittleEndianTo32LittleEndianTestInputs = [][]byte{
 	{65, 0}, {65, 0, 0, 0},
 	{122, 0}, {122, 0, 0, 0},
@@ -149,4 +171,80 @@ var utf16LittleEndianTo32BigEndianTestInputs = [][]byte{
 	// BOM-as-character cases
 	{255, 254}, {0, 0, 254, 255}, // U+FEFF
 	{255, 253}, {0, 0, 253, 255}, // U+FDFF
+}
+
+var utf16LittleEndianTo8TestInputs = [][]byte{
+	{65, 0}, {65}, // 'A'
+	{122, 0}, {122}, // 'z'
+	{32, 0}, {32}, // space
+
+	{233, 0}, {195, 169}, // é
+	{169, 0}, {194, 169}, // ©
+	{176, 0}, {194, 176}, // °
+	{241, 0}, {195, 177}, // ñ
+
+	{16, 4}, {208, 144}, // А (U+0410)
+	{65, 4}, {209, 129}, // с (U+0441)
+
+	{255, 7}, {223, 191}, // ߿ (U+07FF)
+	{255, 215}, {237, 159, 191}, // ퟿ (U+D7FF)
+
+	{128, 8}, {224, 162, 128}, // U+0880
+	{172, 32}, {226, 130, 172}, // €
+	{185, 32}, {226, 130, 185}, // ₹
+	{45, 48}, {227, 128, 173}, // ㌭
+
+	{0, 215}, {237, 156, 128}, // U+D700
+
+	//-----------------------------------------------------
+	// Supplementary Planes (Surrogate Pairs)
+	//-----------------------------------------------------
+
+	{0, 216, 0, 220}, {240, 144, 128, 128}, // U+10000
+	{0, 216, 1, 220}, {240, 144, 128, 129}, // U+10001
+
+	{61, 216, 0, 222}, {240, 159, 152, 128}, // 😀 (U+1F600)
+
+	{255, 219, 255, 223}, {244, 143, 191, 191}, // U+10FFFF
+
+	{196, 219, 0, 220}, {244, 129, 128, 128}, // U+101000
+
+	//-----------------------------------------------------
+	// BMP special values
+	//-----------------------------------------------------
+
+	{255, 16}, {225, 131, 191}, // U+10FF
+	{255, 0}, {195, 191}, // ÿ (U+00FF)
+
+	//-----------------------------------------------------
+	// Noncharacters & replacement
+	//-----------------------------------------------------
+
+	{253, 255}, {239, 191, 189}, // U+FFFD
+	{254, 255}, {239, 191, 190}, // U+FFFE
+
+	//-----------------------------------------------------
+	// Invalid surrogate cases → replaced with U+FFFD
+	//-----------------------------------------------------
+
+	{60, 216}, {239, 191, 189}, // invalid high surrogate
+	{0, 216}, {239, 191, 189}, // lone low surrogate
+
+	//-----------------------------------------------------
+	// Control character
+	//-----------------------------------------------------
+
+	{17, 0}, {17}, // U+0011
+
+	//-----------------------------------------------------
+	// BOM as character (not encoding marker here)
+	//-----------------------------------------------------
+
+	{255, 254}, {239, 187, 191}, // U+FEFF (ZERO WIDTH NO-BREAK SPACE)
+
+	//-----------------------------------------------------
+	// Noncharacter valid code point
+	//-----------------------------------------------------
+
+	{255, 253}, {239, 183, 191}, // U+FDFF
 }
